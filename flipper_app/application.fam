@@ -1,0 +1,13 @@
+App(
+    appid="flipper_cloud",
+    name="Cloud Sync",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="flipper_cloud_app",
+    requires=["gui", "storage", "dialogs", "notification"],
+    stack_size=4 * 1024,
+    fap_category="GPIO",
+    fap_icon="cloud_10px.png",
+    fap_version="1.0",
+    fap_author="AtremmakuGames",
+    fap_description="Upload and download files to filebin.net over the ESP32 WiFi dev board",
+)

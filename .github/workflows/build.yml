@@ -1,0 +1,66 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  flipper-app:
+    name: Flipper app (${{ matrix.sdk-channel }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk-channel: [release, dev]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build FAP with ufbt
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        id: build-app
+        with:
+          app-dir: flipper_app
+          sdk-channel: ${{ matrix.sdk-channel }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flipper_cloud-${{ matrix.sdk-channel }}-${{ steps.build-app.outputs.suffix }}
+          path: ${{ steps.build-app.outputs.fap-artifacts }}
+
+  esp32-firmware:
+    name: ESP32 firmware (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { env: wifi_devboard, chip: esp32s2, bootloader: "0x1000" }
+          - { env: esp32dev, chip: esp32, bootloader: "0x1000" }
+          - { env: esp32s3, chip: esp32s3, bootloader: "0x0" }
+          - { env: esp32c3, chip: esp32c3, bootloader: "0x0" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ matrix.env }}-${{ hashFiles('esp32_firmware/platformio.ini') }}
+      - name: Build
+        run: |
+          pip install platformio "esptool<5"
+          cd esp32_firmware
+          pio run -e ${{ matrix.env }}
+          B=.pio/build/${{ matrix.env }}
+          mkdir -p out
+          cp $B/firmware.bin $B/bootloader.bin $B/partitions.bin out/
+          # One image to flash at 0x0 (e.g. with https://espressif.github.io/esptool-js/)
+          esptool.py --chip ${{ matrix.chip }} merge_bin -o out/flipper_cloud_${{ matrix.env }}_merged.bin \
+            ${{ matrix.bootloader }} $B/bootloader.bin \
+            0x8000 $B/partitions.bin \
+            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+            0x10000 $B/firmware.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esp32-${{ matrix.env }}
+          path: esp32_firmware/out/

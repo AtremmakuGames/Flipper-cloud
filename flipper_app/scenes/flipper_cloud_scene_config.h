@@ -1,0 +1,8 @@
+ADD_SCENE(flipper_cloud, start, Start)
+ADD_SCENE(flipper_cloud, wifi, Wifi)
+ADD_SCENE(flipper_cloud, networks, Networks)
+ADD_SCENE(flipper_cloud, input, Input)
+ADD_SCENE(flipper_cloud, op, Op)
+ADD_SCENE(flipper_cloud, files, Files)
+ADD_SCENE(flipper_cloud, result, Result)
+ADD_SCENE(flipper_cloud, help, Help)

@@ -1,0 +1,12 @@
+# ufbt / fbt
+.ufbt/
+dist/
+build/
+flipper_app/dist/
+flipper_app/.vscode/
+.vscode/
+
+# PlatformIO / Arduino
+esp32_firmware/.pio/
+esp32_firmware/build/
+*.bin
