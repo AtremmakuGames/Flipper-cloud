@@ -27,40 +27,49 @@ jobs:
           path: ${{ steps.build-app.outputs.fap-artifacts }}
 
   esp32-firmware:
-    name: ESP32 firmware (${{ matrix.env }})
+    name: ESP32 firmware (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { env: wifi_devboard, chip: esp32s2, bootloader: "0x1000" }
-          - { env: esp32dev, chip: esp32, bootloader: "0x1000" }
-          - { env: esp32s3, chip: esp32s3, bootloader: "0x0" }
-          - { env: esp32c3, chip: esp32c3, bootloader: "0x0" }
+          - { name: marauder_c5, fqbn: "esp32:esp32:esp32c5", flags: "" }
+          - { name: wifi_devboard, fqbn: "esp32:esp32:esp32s2", flags: "" }
+          - { name: esp32dev, fqbn: "esp32:esp32:esp32", flags: "-DFLIPPER_RX_PIN=16 -DFLIPPER_TX_PIN=17" }
+          - { name: esp32s3, fqbn: "esp32:esp32:esp32s3", flags: "-DFLIPPER_RX_PIN=44 -DFLIPPER_TX_PIN=43" }
+          - { name: esp32c3, fqbn: "esp32:esp32:esp32c3", flags: "-DFLIPPER_RX_PIN=20 -DFLIPPER_TX_PIN=21" }
+    env:
+      ESP32_CORE: "3.3.12"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - uses: arduino/setup-arduino-cli@v2
       - uses: actions/cache@v4
         with:
-          path: ~/.platformio
-          key: pio-${{ matrix.env }}-${{ hashFiles('esp32_firmware/platformio.ini') }}
+          path: ~/.arduino15
+          key: arduino-esp32-${{ env.ESP32_CORE }}
+      - name: Install ESP32 core and ArduinoJson
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@$ESP32_CORE
+          arduino-cli lib install ArduinoJson@7.4.2
       - name: Build
         run: |
-          pip install platformio "esptool<5"
-          cd esp32_firmware
-          pio run -e ${{ matrix.env }}
-          B=.pio/build/${{ matrix.env }}
-          mkdir -p out
-          cp $B/firmware.bin $B/bootloader.bin $B/partitions.bin out/
-          # One image to flash at 0x0 (e.g. with https://espressif.github.io/esptool-js/)
-          esptool.py --chip ${{ matrix.chip }} merge_bin -o out/flipper_cloud_${{ matrix.env }}_merged.bin \
-            ${{ matrix.bootloader }} $B/bootloader.bin \
-            0x8000 $B/partitions.bin \
-            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
-            0x10000 $B/firmware.bin
+          EXTRA=()
+          if [ -n "${{ matrix.flags }}" ]; then
+            EXTRA=(--build-property "compiler.cpp.extra_flags=${{ matrix.flags }}")
+          fi
+          arduino-cli compile -b ${{ matrix.fqbn }} "${EXTRA[@]}" --output-dir build esp32_firmware/FlipperCloudESP32
+          # Separate files for the ESP Flasher app on the Flipper, plus one merged image (flash at 0x0)
+          OUT=out/flipper_cloud_${{ matrix.name }}
+          mkdir -p $OUT
+          cp build/FlipperCloudESP32.ino.bootloader.bin $OUT/bootloader.bin
+          cp build/FlipperCloudESP32.ino.partitions.bin $OUT/partitions.bin
+          cp build/FlipperCloudESP32.ino.bin $OUT/firmware.bin
+          cp ~/.arduino15/packages/esp32/hardware/esp32/$ESP32_CORE/tools/partitions/boot_app0.bin $OUT/boot_app0.bin
+          cp build/FlipperCloudESP32.ino.merged.bin out/flipper_cloud_${{ matrix.name }}_merged.bin
       - uses: actions/upload-artifact@v4
         with:
-          name: esp32-${{ matrix.env }}
-          path: esp32_firmware/out/
+          name: esp32-${{ matrix.name }}
+          path: out/

@@ -71,6 +71,7 @@ typedef enum {
 typedef struct {
     char ssid[CLOUD_SSID_SIZE];
     int8_t rssi;
+    uint8_t channel; /**< 1-14: 2.4 GHz, above: 5 GHz */
     bool open;
 } CloudNetwork;
 

@@ -1,5 +1,6 @@
 /*
- * Flipper Cloud - firmware for the ESP32 WiFi module (Flipper Zero WiFi Dev Board).
+ * Flipper Cloud - firmware for the ESP32 WiFi module (Flipper Zero WiFi Dev Board,
+ * ESP32 Marauder Compact C5 and other ESP32 boards wired to the Flipper UART).
  *
  * Receives text commands from the Flipper over UART and talks to
  * https://filebin.net over WiFi. See docs/PROTOCOL.md for the protocol.
@@ -18,7 +19,8 @@
 #define FLIPPER_BAUD 115200
 #endif
 
-// UART wired to the Flipper. The WiFi Dev Board uses UART0 (GPIO43/44 on the ESP32-S2).
+// UART wired to the Flipper. The WiFi Dev Board (ESP32-S2, GPIO43/44) and the
+// Marauder Compact C5 (ESP32-C5, GPIO11/12) use UART0 on its default pins.
 // Other boards can pick any pins with -DFLIPPER_RX_PIN=.. -DFLIPPER_TX_PIN=..
 #if defined(FLIPPER_RX_PIN) && defined(FLIPPER_TX_PIN)
 #define FLIPPER Serial1
@@ -165,6 +167,14 @@ static String httpError(int code) {
     }
 }
 
+/** Starts the station; dual band chips (ESP32-C5) also look at 5 GHz networks. */
+static void wifiStart() {
+    WiFi.mode(WIFI_STA);
+#if SOC_WIFI_SUPPORT_5G && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 2)
+    WiFi.setBandMode(WIFI_BAND_MODE_AUTO);
+#endif
+}
+
 static bool wifiReady() {
     if(WiFi.status() == WL_CONNECTED) return true;
     reply("ERR", "WiFi not connected");
@@ -174,7 +184,7 @@ static bool wifiReady() {
 // ---------------------------------------------------------------- commands
 
 static void cmdScan() {
-    WiFi.mode(WIFI_STA);
+    wifiStart();
     int count = WiFi.scanNetworks();
     if(count < 0) {
         reply("ERR", "scan failed");
@@ -192,7 +202,10 @@ static void cmdScan() {
         if(duplicate) continue;
 
         bool open = WiFi.encryptionType(i) == WIFI_AUTH_OPEN;
-        reply("AP", String(WiFi.RSSI(i)) + "\t" + (open ? "1" : "0") + "\t" + ssid);
+        reply(
+            "AP",
+            String(WiFi.RSSI(i)) + "\t" + (open ? "1" : "0") + "\t" + String(WiFi.channel(i)) +
+                "\t" + ssid);
         sent++;
     }
     WiFi.scanDelete();
@@ -200,7 +213,7 @@ static void cmdScan() {
 }
 
 static void cmdConnect(const String& ssid, const String& password) {
-    WiFi.mode(WIFI_STA);
+    wifiStart();
     WiFi.disconnect();
     delay(100);
     WiFi.setAutoReconnect(true);
@@ -444,7 +457,7 @@ void setup() {
 #else
     FLIPPER.begin(FLIPPER_BAUD);
 #endif
-    WiFi.mode(WIFI_STA);
+    wifiStart();
     WiFi.setSleep(false);
     reply("PONG", FIRMWARE_VERSION); // lets the Flipper know we (re)booted
 }

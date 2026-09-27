@@ -8,7 +8,7 @@
 
 #define PING_TIMEOUT_MS       1500
 #define STATUS_TIMEOUT_MS     3000
-#define SCAN_TIMEOUT_MS       15000
+#define SCAN_TIMEOUT_MS       20000
 #define CONNECT_TIMEOUT_MS    30000
 #define HTTP_TIMEOUT_MS       30000
 #define CHUNK_LINE_TIMEOUT_MS 20000
@@ -219,6 +219,8 @@ static void op_scan(FlipperCloudApp* app) {
             network->rssi = (int8_t)atoi(furi_string_get_cstr(field));
             next_field(args, field);
             network->open = furi_string_equal_str(field, "1");
+            next_field(args, field);
+            network->channel = (uint8_t)atoi(furi_string_get_cstr(field));
             strlcpy(network->ssid, furi_string_get_cstr(args), sizeof(network->ssid));
             if(network->ssid[0]) app->network_count++;
         } else if(reply == 1) {

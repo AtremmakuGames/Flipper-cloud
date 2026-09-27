@@ -1,6 +1,7 @@
 # Протокол Flipper ↔ ESP32
 
-UART 115200 8N1. Flipper: пин 13 (TX) → RX ESP32, пин 14 (RX) ← TX ESP32, GND ↔ GND, питание 5V (пин 1).
+UART 115200 8N1. Flipper: пин 13 (TX) → RX ESP32, пин 14 (RX) ← TX ESP32, GND ↔ GND.
+Питание: 5V (пин 1) у WiFi Dev Board, 3.3V (пин 9) у Marauder Compact C5.
 
 Каждая команда и каждый ответ — одна текстовая строка, которая заканчивается `\n`.
 Поля разделяются символом табуляции `\t` (дальше в таблице он обозначен как `→`).
@@ -10,7 +11,7 @@ UART 115200 8N1. Flipper: пин 13 (TX) → RX ESP32, пин 14 (RX) ← TX ESP
 | Команда (Flipper → ESP) | Ответы (ESP → Flipper) |
 |---|---|
 | `PING` | `PONG→<версия>` |
-| `SCAN` | `AP→<rssi>→<open 0/1>→<ssid>` × N, затем `SCAN_END→<N>` или `ERR→<текст>` |
+| `SCAN` | `AP→<rssi>→<open 0/1>→<канал>→<ssid>` × N, затем `SCAN_END→<N>` или `ERR→<текст>`. Канал выше 14 означает сеть 5 ГГц |
 | `CONNECT→<ssid>→<пароль>` | `OK→<ip>` или `ERR→<текст>` |
 | `STATUS` | `OK→<ip>` или `ERR→not connected` |
 | `LIST→<bin>` | `FILE→<байт>→<имя>` × N, затем `OK→<N>` или `ERR→<текст>` |

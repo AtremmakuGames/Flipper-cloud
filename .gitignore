@@ -6,7 +6,6 @@ flipper_app/dist/
 flipper_app/.vscode/
 .vscode/
 
-# PlatformIO / Arduino
-esp32_firmware/.pio/
+# Arduino
 esp32_firmware/build/
 *.bin

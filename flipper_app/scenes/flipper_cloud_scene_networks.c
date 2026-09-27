@@ -17,7 +17,12 @@ void flipper_cloud_scene_networks_on_enter(void* context) {
     for(size_t i = 0; i < app->network_count; i++) {
         const CloudNetwork* network = &app->networks[i];
         furi_string_printf(
-            label, "%s%s (%d)", network->open ? "" : "* ", network->ssid, network->rssi);
+            label,
+            "%s%s%s (%d)",
+            network->open ? "" : "* ",
+            network->ssid,
+            network->channel > 14 ? " 5G" : "",
+            network->rssi);
         submenu_add_item(
             submenu, furi_string_get_cstr(label), i, flipper_cloud_scene_networks_callback, app);
     }
