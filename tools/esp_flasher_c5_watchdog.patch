@@ -1,0 +1,69 @@
+# Patch for https://github.com/0xchocolate/flipperzero-esp-flasher (GPL-3.0), commit 1f6f801
+# Disables the ESP32-C5 RTC/super watchdogs right after connecting, so the chip
+# does not reset in the middle of flashing (seen on the ESP32 Marauder Compact C5).
+# Apply: git apply esp_flasher_c5_watchdog.patch
+diff --git a/application.fam b/application.fam
+index 803a879..827830f 100644
+--- a/application.fam
++++ b/application.fam
+@@ -1,6 +1,6 @@
+ App(
+-    appid="esp_flasher",
+-    name="ESP Flasher",
++    appid="esp_flasher_c5fix",
++    name="ESP Flasher C5fix",
+     fap_version=(1, 9),
+     apptype=FlipperAppType.EXTERNAL,
+     entry_point="esp_flasher_app",
+diff --git a/esp_flasher_app_i.h b/esp_flasher_app_i.h
+index aa99b78..6db4be0 100644
+--- a/esp_flasher_app_i.h
++++ b/esp_flasher_app_i.h
+@@ -17,7 +17,7 @@
+ #include <gui/modules/widget.h>
+ #include <gui/modules/text_input.h>
+ 
+-#include <esp_flasher_icons.h>
++#include <esp_flasher_c5fix_icons.h>
+ #include <storage/storage.h>
+ #include <lib/toolbox/path.h>
+ #include <dialogs/dialogs.h>
+diff --git a/esp_flasher_worker.c b/esp_flasher_worker.c
+index f5eba05..765747b 100644
+--- a/esp_flasher_worker.c
++++ b/esp_flasher_worker.c
+@@ -224,6 +224,34 @@ static int32_t esp_flasher_flash_bin(void* context) {
+         loader_port_debug_print(err_msg);
+     }
+ 
++    // ESP32-C5: the RTC (LP) watchdog and the super watchdog can stay armed in
++    // download mode and reset the chip in the middle of flashing (the old
++    // firmware then boots and answers instead of the ROM). esptool does the
++    // same for USB-JTAG connections: disable RWDT, let the SWD feed itself.
++    if(!err && esp_loader_get_target() == ESP32C5_CHIP) {
++        const uint32_t lp_wdt = 0x600B1C00;
++        const uint32_t wkey = 0x50D83AA1;
++        uint32_t rwdt_cfg = 0, swd_cfg = 0;
++        esp_loader_read_register(lp_wdt + 0x00, &rwdt_cfg);
++        esp_loader_read_register(lp_wdt + 0x1C, &swd_cfg);
++        char wdt_msg[96];
++        snprintf(
++            wdt_msg,
++            sizeof(wdt_msg),
++            "C5 watchdogs: RWDT %s, SWD 0x%08lx\n",
++            (rwdt_cfg & (1UL << 31)) ? "ON" : "off",
++            swd_cfg);
++        loader_port_debug_print(wdt_msg);
++
++        esp_loader_write_register(lp_wdt + 0x18, wkey); // RWDT unlock
++        esp_loader_write_register(lp_wdt + 0x00, 0); // RWDT off
++        esp_loader_write_register(lp_wdt + 0x18, 0); // RWDT lock
++        esp_loader_write_register(lp_wdt + 0x20, wkey); // SWD unlock
++        esp_loader_write_register(lp_wdt + 0x1C, swd_cfg | (1UL << 18)); // SWD auto feed
++        esp_loader_write_register(lp_wdt + 0x20, 0); // SWD lock
++        loader_port_debug_print("C5 watchdogs disabled\n");
++    }
++
+     // higher BR
+     if(!err && app->turbospeed) {
+         loader_port_debug_print("Increasing speed for faster flash\n");
