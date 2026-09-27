@@ -53,6 +53,15 @@ static bool
     return false;
 }
 
+/** Remembers text that is not part of the protocol, to explain what the module is doing. */
+static void remember_junk(FlipperCloudApp* app, FuriString* line) {
+    size_t out = 0;
+    for(const char* c = furi_string_get_cstr(line); *c && out < sizeof(app->junk) - 1; c++) {
+        if(*c >= 0x20 && *c < 0x7f) app->junk[out++] = *c;
+    }
+    if(out > 0) app->junk[out] = '\0';
+}
+
 /**
  * Waits for a line that starts with one of `prefixes` (NULL terminated list).
  * Other lines (boot messages, leftovers) are skipped. Returns the index of the
@@ -72,7 +81,10 @@ static int wait_reply(
     while(found < 0) {
         uint32_t elapsed = (furi_get_tick() - start) / furi_ms_to_ticks(1);
         if(elapsed >= timeout_ms) break;
-        if(!read_line(app, line, timeout_ms - elapsed, cancellable)) break;
+        if(!read_line(app, line, timeout_ms - elapsed, cancellable)) {
+            remember_junk(app, line); // partial line without '\n'
+            break;
+        }
 
         for(int i = 0; prefixes[i]; i++) {
             size_t length = strlen(prefixes[i]);
@@ -84,6 +96,7 @@ static int wait_reply(
                 break;
             }
         }
+        if(found < 0) remember_junk(app, line);
     }
 
     furi_string_free(line);
@@ -113,6 +126,7 @@ static bool ensure_module(FlipperCloudApp* app) {
     bool found = false;
 
     set_status(app, "Looking for module...");
+    app->junk[0] = '\0';
     for(int attempt = 0; attempt < 3 && !found && !app->cancel; attempt++) {
         cloud_uart_flush_rx(app->uart);
         cloud_uart_send_line(app->uart, "PING");
@@ -122,9 +136,21 @@ static bool ensure_module(FlipperCloudApp* app) {
         strlcpy(app->module_version, furi_string_get_cstr(args), sizeof(app->module_version));
 
     if(!found && !app->cancel) {
-        fail(
-            app,
-            "WiFi module not responding.\nFlash the Flipper Cloud firmware\nand check the connection.");
+        if(strstr(app->junk, "waiting for download") || strstr(app->junk, "DOWNLOAD")) {
+            fail(
+                app, "Module is in flashing mode.\nReinsert it WITHOUT\nholding the BOOT button.");
+        } else if(app->junk[0]) {
+            // Something answers, but not our firmware (e.g. Marauder is still installed).
+            furi_string_printf(
+                app->op_message,
+                "Wrong module firmware.\nFlash Flipper Cloud firmware.\nGot: %s",
+                app->junk);
+            app->op_success = false;
+        } else {
+            fail(
+                app,
+                "WiFi module not responding\n(no data on pins 13/14).\nFlash Flipper Cloud firmware,\nreinsert the module.");
+        }
     }
     furi_string_free(args);
     return found;

@@ -118,6 +118,7 @@ typedef struct {
     char remote_name[CLOUD_NAME_SIZE];
     char ip[16];
     char module_version[32];
+    char junk[40]; /**< Last non-protocol text received from the module */
 
     CloudNetwork* networks;
     size_t network_count;
